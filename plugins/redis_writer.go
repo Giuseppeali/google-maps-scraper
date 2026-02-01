@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/gosom/scrapemate"
 	"github.com/redis/go-redis/v9"
@@ -23,13 +24,19 @@ type RedisWriter struct {
 	queue  string
 }
 
-// Automatic initialization when plugin is loaded
+type HandoverPayload struct {
+	JobID     string      `json:"job_id"`
+	Source    string      `json:"source"`
+	Timestamp string      `json:"timestamp"`
+	Data      interface{} `json:"data"`
+}
+
 func init() {
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
 		redisAddr = "redis:6379"
 	}
-	
+
 	queueName := os.Getenv("REDIS_QUEUE_NAME")
 	if queueName == "" {
 		queueName = "gmaps_discovery_queue"
@@ -47,21 +54,28 @@ func init() {
 
 func (w *RedisWriter) Run(ctx context.Context, in <-chan scrapemate.Result) error {
 	for result := range in {
-		// Convert result (Gmaps Entry) to JSON
-		data, err := json.Marshal(result.Data)
+		var jobID string
+		if job, ok := result.Job.(scrapemate.IJob); ok {
+			jobID = job.GetID()
+		}
+
+		payload := HandoverPayload{
+			JobID:     jobID,
+			Source:    "gmaps_go",
+			Timestamp: time.Now().Format(time.RFC3339),
+			Data:      result.Data,
+		}
+
+		data, err := json.Marshal(payload)
 		if err != nil {
 			fmt.Printf("❌ Error serializing data: %v\n", err)
 			continue
 		}
 
 		// Send to Redis (RPUSH for FIFO queue)
-		// Use context.Background() to ensure sending isn't prematurely cancelled
 		err = w.client.RPush(context.Background(), w.queue, data).Err()
 		if err != nil {
 			fmt.Printf("❌ Error writing to Redis: %v\n", err)
-		} else {
-            // Optional: Visual feedback
-			// fmt.Print(".") 
 		}
 	}
 	return nil
