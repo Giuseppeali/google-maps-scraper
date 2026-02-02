@@ -246,6 +246,14 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 
 	mate.Close()
 
+	// Send completion signal
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if err := rediswriter.SendJobCompletion(ctx, redisAddr, job.ID); err != nil {
+		log.Printf("failed to send job completion signal: %v", err)
+	} else {
+		log.Printf("✅ Job completion signal sent for %s", job.ID)
+	}
+
 	job.Status = web.StatusOK
 
 	return w.svc.Update(ctx, job)

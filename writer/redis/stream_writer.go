@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gosom/google-maps-scraper/gmaps"
 	"github.com/gosom/scrapemate"
 	"github.com/redis/go-redis/v9"
 )
@@ -34,6 +35,28 @@ type StreamPayload struct {
 	Data      interface{} `json:"data,omitempty"`
 	FilePath  string      `json:"file_path,omitempty"`
 	Timestamp string      `json:"timestamp"`
+}
+
+type PythonPayload struct {
+	Metadata struct {
+		Url           string `json:"url"` // Canonical URL (website)
+		GoogleMapsUrl string `json:"google_maps_url"`
+		InputSource   string `json:"input_source"`
+		JobId         string `json:"job_id"`
+		ScrapedAt     string `json:"scraped_at"`
+	} `json:"metadata"`
+	Title       string  `json:"title"`
+	Category    string  `json:"category"`
+	Address     string  `json:"address"`
+	Phone       string  `json:"phone"`
+	Website     string  `json:"website"`
+	Rating      float64 `json:"rating"`
+	ReviewCount int     `json:"reviews"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	Cid         string  `json:"cid"`
+	PlaceId     string  `json:"place_id"`
+	Email       string  `json:"email,omitempty"`
 }
 
 func NewStreamWriter(addr string, jobID string) *StreamWriter {
@@ -86,8 +109,39 @@ func (w *StreamWriter) Run(ctx context.Context, in <-chan scrapemate.Result) err
 	log.Printf("🚀 Redis Stream Writer started for Job %s", w.jobID)
 
 	for result := range in {
+		entry, ok := result.Data.(*gmaps.Entry)
+		if !ok {
+			log.Printf("❌ Data is not *gmaps.Entry, skipping")
+			continue
+		}
+
+		// Map to PythonPayload
+		payloadData := PythonPayload{
+			Title:       entry.Title,
+			Category:    entry.Category,
+			Address:     entry.Address,
+			Phone:       entry.Phone,
+			Website:     entry.WebSite,
+			Rating:      entry.ReviewRating,
+			ReviewCount: entry.ReviewCount,
+			Latitude:    entry.Latitude,
+			Longitude:   entry.Longtitude,
+			Cid:         entry.Cid,
+			PlaceId:     entry.PlaceID,
+		}
+
+		if len(entry.Emails) > 0 {
+			payloadData.Email = entry.Emails[0]
+		}
+
+		payloadData.Metadata.Url = entry.WebSite
+		payloadData.Metadata.GoogleMapsUrl = entry.Link
+		payloadData.Metadata.InputSource = "gmaps_go"
+		payloadData.Metadata.JobId = w.jobID
+		payloadData.Metadata.ScrapedAt = time.Now().Format(time.RFC3339)
+
 		// Preparar datos (mapeo similar al anterior plugin pero simplificado)
-		dataBytes, err := json.Marshal(result.Data)
+		dataBytes, err := json.Marshal(payloadData)
 		if err != nil {
 			log.Printf("❌ Serialization error: %v", err)
 			continue
@@ -134,4 +188,39 @@ func (w *StreamWriter) Run(ctx context.Context, in <-chan scrapemate.Result) err
 		}
 	}
 	return nil
+}
+
+// SendJobCompletion envía una señal de finalización al stream
+func SendJobCompletion(ctx context.Context, addr string, jobID string) error {
+	if addr == "" {
+		addr = "redis:6379"
+	}
+	client := redis.NewClient(&redis.Options{Addr: addr})
+	defer client.Close()
+
+	payload := map[string]interface{}{
+		"type":        "control",
+		"event":       "job_finished",
+		"job_id":      jobID,
+		"timestamp":   time.Now().Format(time.RFC3339),
+		"finish_code": "OK",
+	}
+
+	// Wrap in StreamPayload structure to be consistent, though Python likely checks raw payload first
+	container := StreamPayload{
+		Type:      "control",
+		JobID:     jobID,
+		Timestamp: time.Now().Format(time.RFC3339),
+		Data:      payload,
+	}
+	containerBytes, _ := json.Marshal(container)
+
+	return client.XAdd(ctx, &redis.XAddArgs{
+		Stream: StreamKey,
+		Values: map[string]interface{}{
+			"payload": containerBytes,
+			"job_id":  jobID,
+			"type":    "control",
+		},
+	}).Err()
 }
