@@ -18,6 +18,7 @@ import (
 	"github.com/gosom/google-maps-scraper/tlmt"
 	"github.com/gosom/google-maps-scraper/web"
 	"github.com/gosom/google-maps-scraper/web/sqlite"
+	rediswriter "github.com/gosom/google-maps-scraper/writer/redis"
 	"github.com/gosom/scrapemate"
 	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
 	"github.com/gosom/scrapemate/scrapemateapp"
@@ -289,6 +290,14 @@ func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job)
 	csvWriter := csvwriter.NewCsvWriter(csv.NewWriter(writer))
 
 	writers := []scrapemate.ResultWriter{csvWriter}
+
+	if os.Getenv("ENABLE_REDIS_WRITER") == "true" {
+		redisAddr := os.Getenv("REDIS_ADDR")
+		queueName := os.Getenv("REDIS_QUEUE_NAME")
+		rw := rediswriter.New(redisAddr, queueName)
+		writers = append(writers, rw)
+		log.Println("🔌 Added RedisWriter to Scrapemate")
+	}
 
 	matecfg, err := scrapemateapp.NewConfig(
 		writers,

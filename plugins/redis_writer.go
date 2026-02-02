@@ -55,8 +55,8 @@ func init() {
 func (w *RedisWriter) Run(ctx context.Context, in <-chan scrapemate.Result) error {
 	for result := range in {
 		var jobID string
-		if job, ok := result.Job.(scrapemate.IJob); ok {
-			jobID = job.GetID()
+		if result.Job != nil {
+			jobID = result.Job.GetID()
 		}
 
 		payload := HandoverPayload{
@@ -79,4 +79,8 @@ func (w *RedisWriter) Run(ctx context.Context, in <-chan scrapemate.Result) erro
 		}
 	}
 	return nil
+}
+
+func main() {
+	// Plugin entry point - empty
 }
