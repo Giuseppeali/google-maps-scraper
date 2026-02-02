@@ -3,7 +3,7 @@ FROM golang:1.25.6-trixie AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 # Install redis dependency
-RUN go get github.com/redis/go-redis/v9
+
 RUN go mod download
 
 # CACHE BUST: 2026-01-30-FORCE-REBUILD
@@ -12,7 +12,7 @@ COPY . .
 RUN CGO_ENABLED=1 go build -tags rod -ldflags="-w -s" -o /usr/bin/google-maps-scraper
 
 # Build Redis writer plugin
-RUN CGO_ENABLED=1 go build -buildmode=plugin -tags rod -o /usr/bin/redis_writer.so plugins/redis_writer.go
+
 
 # Download Chromium for rod during build using the browser download tool
 RUN go run github.com/go-rod/rod/lib/utils/get-browser@latest
@@ -56,7 +56,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /var/run/dbus
 
 COPY --from=builder /usr/bin/google-maps-scraper /usr/bin/
-COPY --from=builder /usr/bin/redis_writer.so /usr/local/lib/redis_writer.so
 COPY --from=builder /root/.cache/rod /root/.cache/rod
 
 ENTRYPOINT ["google-maps-scraper"]

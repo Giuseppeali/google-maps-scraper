@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	stdLog "log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +22,7 @@ import (
 	"github.com/gosom/scrapemate"
 	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
 	"github.com/gosom/scrapemate/scrapemateapp"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -293,10 +294,22 @@ func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job)
 
 	if os.Getenv("ENABLE_REDIS_WRITER") == "true" {
 		redisAddr := os.Getenv("REDIS_ADDR")
-		queueName := os.Getenv("REDIS_QUEUE_NAME")
-		rw := rediswriter.New(redisAddr, queueName)
+		// Use Stream Writer
+		rw := rediswriter.NewStreamWriter(redisAddr, job.ID)
+
+		// Configure Hybrid Logs (Stdout + Redis)
+		// This captures all log.Println/Printf calls
+		mw := io.MultiWriter(os.Stdout, rw)
+
+		// Configure Standard Log
+		stdLog.SetFlags(0)
+		stdLog.SetOutput(mw)
+
+		// Configure Zerolog (used by scrapemate)
+		log.Logger = log.Output(mw)
+
 		writers = append(writers, rw)
-		log.Println("🔌 Added RedisWriter to Scrapemate")
+		stdLog.Println("🔌 Native Redis Stream Writer & Logger attached")
 	}
 
 	matecfg, err := scrapemateapp.NewConfig(
