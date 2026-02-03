@@ -134,7 +134,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/gordonklaus/ineffassign v0.1.0 // indirect
-	github.com/gosom/kit v0.0.0-20230309082109-543b32ac686a // indirect
+	github.com/gosom/kit v0.0.0-20230309082109-543b32ac686a // direct
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
 	github.com/gostaticanalysis/comment v1.5.0 // indirect
 	github.com/gostaticanalysis/forcetypeassert v0.2.0 // indirect

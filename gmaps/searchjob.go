@@ -68,7 +68,7 @@ func WithSearchJobExitMonitor(exitMonitor exiter.Exiter) SearchJobOptions {
 	}
 }
 
-func (j *SearchJob) Process(_ context.Context, resp *scrapemate.Response) (any, []scrapemate.IJob, error) {
+func (j *SearchJob) Process(ctx context.Context, resp *scrapemate.Response) (any, []scrapemate.IJob, error) {
 	defer func() {
 		resp.Document = nil
 		resp.Body = nil
@@ -96,6 +96,8 @@ func (j *SearchJob) Process(_ context.Context, resp *scrapemate.Response) (any, 
 		j.ExitMonitor.IncrPlacesFound(len(entries))
 		j.ExitMonitor.IncrPlacesCompleted(len(entries))
 	}
+
+	scrapemate.GetLoggerFromContext(ctx).Info(fmt.Sprintf("%d places found", len(entries)))
 
 	return entries, nil, nil
 }

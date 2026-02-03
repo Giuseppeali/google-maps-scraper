@@ -19,6 +19,7 @@ import (
 	"github.com/gosom/google-maps-scraper/web"
 	"github.com/gosom/google-maps-scraper/web/sqlite"
 	rediswriter "github.com/gosom/google-maps-scraper/writer/redis"
+	"github.com/gosom/kit/logging"
 	"github.com/gosom/scrapemate"
 	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
 	"github.com/gosom/scrapemate/scrapemateapp"
@@ -315,6 +316,13 @@ func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job)
 
 		// Configure Zerolog (used by scrapemate)
 		log.Logger = log.Output(mw)
+
+		// Configure kit/logging default (used INTERNALLY by scrapemate)
+		// This is CRITICAL: scrapemate uses logging.Get() to get its logger
+		// We must set the default BEFORE scrapemateapp.NewScrapeMateApp() is called
+		// This ensures "job finished", "places found" etc. are captured and sent to Redis
+		customLogger := logging.New("zerolog", logging.INFO, mw)
+		logging.SetDefault(customLogger)
 
 		writers = append(writers, rw)
 		stdLog.Println("🔌 Native Redis Stream Writer & Logger attached")
